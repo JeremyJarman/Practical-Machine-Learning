@@ -1,0 +1,98 @@
+---
+title: "Practical Machine Learning Wk 4 Project"
+author: "Jeremy Jarman"
+date: "November 26, 2017"
+output: html_document
+---
+
+##Introduction
+
+The objective of this analysis was to apply machine learning techniques to develop a predictive model for activity tracking. Six volunteers were asked to perform an exercise five different ways labelled classe A-E, while accelerometers placed on the dumbell, arm, forearm, belt of each volunteer recorded data.
+A test and training data set were provided and ultimately a Random Forest model was chosen for use in future predictions.
+
+
+## Getting and Cleaning The Data
+
+
+```{r}
+library(ggplot2)
+library(caret)
+library(rpart)
+library(randomForest)
+
+##Loading Test and Training Data
+validate<-read.csv("pml-testing.csv",header=TRUE,na.strings = c("NA", "#DIV/0!",""))
+BulkTrainingData<-read.csv("pml-training.csv", header=TRUE, na.strings = c("NA", "#DIV/0!",""))
+set.seed(1234)
+
+##Remove Variables with near zero variance
+nzv <- nearZeroVar(BulkTrainingData,saveMetrics = TRUE)
+trainingData <- BulkTrainingData[,nzv$nzv == FALSE]
+
+##Remove Columns With greater than 50% NA values
+trainingData <- trainingData[, -which(colMeans(is.na(trainingData)) > 0.5)]
+
+##Remove non predictors
+trainingData<-trainingData[,-c(1:7)]
+
+##Split the data into a test and training set
+inTrain<-createDataPartition(trainingData$classe, p=0.7, list=FALSE)
+training<-trainingData[inTrain,]
+testing<-trainingData[-inTrain,]
+dim(training)
+dim(testing)
+
+```
+
+## Predictive Models
+
+I used the recursive partitioning method to generate my first model
+
+```{r, cache=TRUE}
+##Build the model using Recursive Partitioning
+
+modFit1<-train(classe ~., method="rpart", preProcess=c("center", "scale"), data=training)
+predicted<-predict(modFit1,newdata=training)
+confusionMatrix(predicted, training$classe)
+```
+
+Accuracy of this model was low, so a second model was generated using the Random Forest method. 
+
+```{r, cache=TRUE}
+##Build the model using Recursive Partitioning
+
+modFit2<-train(classe~., method="rf", 
+               metric="Accuracy", 
+               preProcess=c("center", "scale"), 
+               trControl=trainControl(method = "cv",number = 3, p=0.6,allowParallel = TRUE),
+               data=training)
+
+predicted2<-predict(modFit2,newdata=training)
+confusionMatrix(predicted2, training$classe)
+
+```
+
+As expected, a much better result was observed with the Random Forest method, although there is a danger of over fitting, so to get an idea of the out of sample error rate I tested the model against the testing data.
+
+```{r}
+predicted3<-predict(modFit2,newdata=testing)
+confusionMatrix(predicted3, testing$classe)
+
+```
+Here we can calculate the out of sample errore rate to be 1-0.9951 = 0.0049. 
+
+Finally I tested the model against the validation data set ("pml-testing.csv") which yielded the follwoing results
+
+```{r}
+predicted4<-predict(modFit2,newdata=validate)
+predicted4
+
+```
+
+
+##Conclusion
+
+Although recursive partitioning is a faster method in this example, the model yielded poor accuracy and ultimately the more resource intensive Random Forest method was chosen resulting in a strong predictive model with which to interogate future data.
+
+
+
